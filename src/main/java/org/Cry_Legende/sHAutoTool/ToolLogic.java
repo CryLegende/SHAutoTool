@@ -151,13 +151,13 @@ public class ToolLogic {
             if (SWORDS.contains(itemInSlot.getType())) {
                 isCurrentSlotWeapon = true;
                 currentDamageScore = 1000f;
-                currentDamageScore += itemInSlot.getEnchantmentLevel(Enchantment.DAMAGE_ALL) * 100;
-                currentDamageScore += itemInSlot.getEnchantmentLevel(Enchantment.DAMAGE_UNDEAD) * getUndeadMultiplier(targetType);
-                currentDamageScore += itemInSlot.getEnchantmentLevel(Enchantment.DAMAGE_ARTHROPODS) * getArthropodMultiplier(targetType);
+                currentDamageScore += itemInSlot.getEnchantmentLevel(Enchantment.SHARPNESS) * 100;
+                currentDamageScore += itemInSlot.getEnchantmentLevel(Enchantment.SMITE) * getUndeadMultiplier(targetType);
+                currentDamageScore += itemInSlot.getEnchantmentLevel(Enchantment.BANE_OF_ARTHROPODS) * getArthropodMultiplier(targetType);
             } else if (AXES.contains(itemInSlot.getType())) {
                 isCurrentSlotWeapon = true;
                 currentDamageScore = 500f;
-                currentDamageScore += itemInSlot.getEnchantmentLevel(Enchantment.DAMAGE_ALL) * 100;
+                currentDamageScore += itemInSlot.getEnchantmentLevel(Enchantment.SHARPNESS) * 100;
             }
 
             if (isCurrentSlotWeapon && currentDamageScore > bestDamageScore) {
