@@ -1,0 +1,54 @@
+# Configuration pour les restrictions de monde de SHAutoTool.
+
+worlds:
+  # Mode de fonctionnement de la liste des mondes.
+  # 'blacklist': Le plugin sera désactivé dans les mondes listés ci-dessous.
+  # 'whitelist': Le plugin ne sera activé QUE dans les mondes listés ci-dessous.
+  mode: whitelist
+  
+  # Liste des noms de mondes concernés par le mode ci-dessus.
+  # Les noms doivent correspondre exactement aux noms des dossiers de vos mondes.
+  # Exemple :
+  # list:
+  #   - 'world_creative'
+  #   - 'monde_minijeux'
+  list:
+  - SuperiorWorld
+
+# Le changement d'outil automatique ne se déclenchera pas si vous cliquez
+# sur l'un de ces blocs. Utile pour éviter de casser des blocs fragiles
+# comme la farmland en changeant d'outil pour une pelle.
+# Utilisez les noms de matériaux de Spigot (ex: FARMLAND, WHEAT, CARROTS).
+block-blacklist:
+- FARMLAND
+- WHEAT
+- POTATOES
+- CARROTS
+- BEETROOTS
+- NETHER_WART
+- COCOA
+- SWEET_BERRY_BUSH
+- MELON_STEM
+- PUMPKIN_STEM
+- SUGAR_CANE
+- BAMBOO
+- KELP_PLANT
+- VINE
+- TWISTING_VINES
+- WEEPING_VINES
+- SCULK_CATALYST
+
+options:
+  # Si 'true', l'auto-tool ne s'activera pas si le joueur a une hache en or
+  # (GOLDEN_AXE) dans sa main principale. Très utile pour la compatibilité
+  # avec la 'wand' de WorldEdit.
+  disable-if-holding-golden-axe: true
+
+# Configurez le texte affiché par le placeholder %shautotool_status%.
+placeholders:
+  status_enabled: enabled
+  status_disabled: disabled
+
+messages:
+  toggle-enabled: '&7&l« &a&lSH &8&l» &fVous avez activé l''auto-tool'
+  toggle-disabled: '&7&l« &c&lSH &8&l» &fVous avez désactivé l''auto-tool'
