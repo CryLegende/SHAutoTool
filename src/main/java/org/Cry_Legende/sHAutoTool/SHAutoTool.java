@@ -14,10 +14,14 @@ import org.jetbrains.annotations.NotNull;
 
 import java.io.*;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class SHAutoTool extends JavaPlugin {
 
-    private final Set<UUID> disabledPlayers = new HashSet<>();
+    // Ensemble concurrent : lu par la sauvegarde asynchrone pendant que le thread principal le modifie
+    private final Set<UUID> disabledPlayers = ConcurrentHashMap.newKeySet();
+    // Une seule écriture à la fois sur disabled_players.txt (deux sauvegardes async rapprochées se marchaient dessus)
+    private final Object saveLock = new Object();
     private ToolLogic toolLogic;
     private File disabledPlayersFile;
 
@@ -149,16 +153,25 @@ public class SHAutoTool extends JavaPlugin {
     }
 
     private void saveDisabledPlayersToFile(boolean async) {
-        Set<UUID> playersToSave = new HashSet<>(disabledPlayers);
-
         Runnable saveTask = () -> {
-            try (BufferedWriter writer = new BufferedWriter(new FileWriter(disabledPlayersFile, false))) {
-                for (UUID uuid : playersToSave) {
-                    writer.write(uuid.toString());
-                    writer.newLine();
+            // L'instantané est pris sous le verrou : la dernière sauvegarde exécutée écrit toujours l'état le plus récent
+            synchronized (saveLock) {
+                File tmp = new File(disabledPlayersFile.getParentFile(), disabledPlayersFile.getName() + ".tmp");
+                try (BufferedWriter writer = new BufferedWriter(new FileWriter(tmp, false))) {
+                    for (UUID uuid : disabledPlayers) {
+                        writer.write(uuid.toString());
+                        writer.newLine();
+                    }
+                } catch (IOException e) {
+                    getLogger().severe("Could not save disabled players to " + disabledPlayersFile.getName() + ": " + e.getMessage());
+                    return;
                 }
-            } catch (IOException e) {
-                getLogger().severe("Could not save disabled players to " + disabledPlayersFile.getName() + ": " + e.getMessage());
+                try {
+                    java.nio.file.Files.move(tmp.toPath(), disabledPlayersFile.toPath(),
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+                } catch (IOException e) {
+                    getLogger().severe("Could not replace " + disabledPlayersFile.getName() + ": " + e.getMessage());
+                }
             }
         };
 
