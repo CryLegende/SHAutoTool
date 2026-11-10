@@ -18,12 +18,27 @@ Change automatiquement d'outil pour le plus adapté dans la hotbar.
 
 Utilisé sur : **Opale**.
 
+## Dépendances
+
+- Optionnelles : `PlaceholderAPI`, `SHNetwork` (mode réseau)
+
+## Mode réseau
+
+Avec **SHNetwork** installé (et `reseau.actif: true`, valeur par défaut), plusieurs serveurs de jeu partagent la liste des joueurs qui ont désactivé l'AutoTool :
+
+- la liste est dans MariaDB (table `shautotool_disabled`, une ligne par joueur désactivé) ; `/shautotooltoggle` ajoute ou retire cette seule ligne, sur un fil à part ;
+- au départ d'un joueur, SHNetwork attend que ces écritures soient finies ;
+- à son arrivée sur l'autre serveur, son état est relu en base une fois le départ confirmé ; d'ici là l'AutoTool est actif (valeur par défaut, jamais écrite en base) ;
+- `disabled_players.txt` n'est plus lu ni écrit : `/shautotool import` le reprend une fois dans la base, sans écraser ce qui y est déjà.
+
+Sans SHNetwork, ou sans les clés `reseau` dans la configuration, le plugin se comporte comme avant : liste locale dans `disabled_players.txt`. Si la base est injoignable, le joueur garde l'AutoTool actif. La table se crée toute seule au démarrage, ou à la main avec `sql/schema.sql`.
+
 ## Commandes
 
 | Commande | Alias | Description | Permission |
 |---|---|---|---|
 | `/shautotooltoggle` | `/shatt`, `/autotooltoggle` | Active ou désactive l'AutoTool pour vous. | — |
-| `/shautotool` | `/shat` | Commande administrative pour SHAutoTool. | `shautotool.admin` |
+| `/shautotool` | `/shat` | Commande administrative pour SHAutoTool (`reload`, `import`). | `shautotool.admin` |
 
 ## Permissions
 
@@ -38,7 +53,8 @@ Fichiers par défaut repris du serveur (secrets remplacés par `CHANGE_ME`). Cli
 
 <pre>
 plugins/SHAutoTool/
-└── <a href="src/main/resources/config.yml">config.yml</a>
+├── <a href="src/main/resources/config.yml">config.yml</a>
+└── <a href="src/main/resources/messages.yml">messages.yml</a>
 </pre>
 
 ## Compilation

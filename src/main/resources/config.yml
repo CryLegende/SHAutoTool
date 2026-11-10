@@ -1,3 +1,25 @@
+# ======================================================================== #
+# SHAutoTool
+#
+# Plugin : change automatiquement d'outil pour le plus adapté dans la hotbar quand le joueur clique sur un bloc
+# ou frappe une entité. Chaque joueur peut le désactiver pour lui. Avec SHNetwork, ce choix suit le joueur d'un
+# serveur à l'autre (voir la section 'reseau' en bas du fichier).
+#
+# Commandes :
+#   /shautotooltoggle     Active ou désactive l'AutoTool pour soi (alias : /shatt, /autotooltoggle).
+#   /shautotool reload    Recharge la configuration (alias : /shat). Les clés de 'reseau' demandent un redémarrage.
+#   /shautotool import    Mode réseau : reprend disabled_players.txt dans la base partagée (une seule fois).
+#
+# Permissions :
+#   shautotool.admin      Utiliser /shautotool (par défaut : op).
+#   shautotool.reload     Recharger la configuration (par défaut : op).
+#
+# Placeholder : %shautotool_status% = texte de 'placeholders' selon l'état du joueur.
+#
+# Les messages du mode réseau sont dans 'messages.yml'.
+#
+# ======================================================================== #
+
 # Configuration pour les restrictions de monde de SHAutoTool.
 
 worlds:
@@ -52,3 +74,20 @@ placeholders:
 messages:
   toggle-enabled: '&7&l« &a&lSH &8&l» &fVous avez activé l''auto-tool'
   toggle-disabled: '&7&l« &c&lSH &8&l» &fVous avez désactivé l''auto-tool'
+
+# Mode réseau. Actif seulement si SHNetwork est installé et 'actif' vaut true : la liste des joueurs qui ont
+# désactivé l'AutoTool est alors dans la base partagée (table shautotool_disabled : une ligne par joueur) et relue
+# à l'arrivée du joueur sur un serveur. Sans SHNetwork, rien de ceci n'est utilisé et la liste reste dans
+# disabled_players.txt. Demande un redémarrage.
+reseau:
+  actif: true
+  # Durée maximale, en secondes, pendant laquelle on attend que l'autre serveur ait fini de sauvegarder
+  # le joueur avant de relire son état
+  attente-max-secondes: 10
+  base-de-donnees:
+    url: "jdbc:mariadb://127.0.0.1:3306/bo_net"
+    utilisateur: shautotool
+    mot-de-passe: CHANGE_ME
+    # Délai maximal de connexion et de réponse de la base, en millisecondes. Une base qui ne répond pas
+    # laisse le joueur avec l'AutoTool actif.
+    delai-ms: 3000

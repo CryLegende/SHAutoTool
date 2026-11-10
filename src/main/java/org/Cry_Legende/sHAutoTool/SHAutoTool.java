@@ -1,5 +1,9 @@
 package org.Cry_Legende.sHAutoTool;
 
+import org.Cry_Legende.sHAutoTool.network.DisabledDatabase;
+import org.Cry_Legende.sHAutoTool.network.NetworkDisabled;
+import org.Cry_Legende.sHAutoTool.network.NetworkLink;
+import org.Cry_Legende.sHAutoTool.network.ShNetworkLink;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
@@ -8,13 +12,17 @@ import org.bukkit.block.Block;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
 
 public class SHAutoTool extends JavaPlugin {
 
@@ -24,6 +32,9 @@ public class SHAutoTool extends JavaPlugin {
     private final Object saveLock = new Object();
     private ToolLogic toolLogic;
     private File disabledPlayersFile;
+    // Non nul seulement avec SHNetwork : la liste des joueurs désactivés vit alors dans la base partagée
+    private NetworkDisabled network;
+    private YamlConfiguration messages;
 
     // --- Champs pour la configuration ---
     private String worldMode;
@@ -48,7 +59,12 @@ public class SHAutoTool extends JavaPlugin {
         }
         disabledPlayersFile = new File(getDataFolder(), "disabled_players.txt");
 
-        loadDisabledPlayersFromFile();
+        loadMessages();
+        enableNetwork();
+        // Avec le mode réseau, la base fait foi : le fichier local n'est lu que par /shautotool import
+        if (network == null) {
+            loadDisabledPlayersFromFile();
+        }
 
         toolLogic = new ToolLogic(this);
         getServer().getPluginManager().registerEvents(new PlayerToolListener(this, toolLogic), this);
@@ -65,8 +81,56 @@ public class SHAutoTool extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        saveDisabledPlayersToFile(false);
+        if (network != null) {
+            network.stop();
+        } else {
+            saveDisabledPlayersToFile(false);
+        }
         getLogger().info("SHAutoTool disabled!");
+    }
+
+    /**
+     * Passe en mode réseau si SHNetwork est installé et 'reseau.actif' est vrai. Les classes qui touchent à SHNetwork
+     * ne sont chargées qu'ici : sans lui, le plugin se comporte exactement comme avant.
+     */
+    private void enableNetwork() {
+        if (!getConfig().getBoolean("reseau.actif", true)) return;
+        if (!Bukkit.getPluginManager().isPluginEnabled("SHNetwork")) return;
+        DisabledDatabase db = null;
+        try {
+            NetworkLink link = ShNetworkLink.open();
+            db = new DisabledDatabase(
+                getConfig().getString("reseau.base-de-donnees.url"),
+                getConfig().getString("reseau.base-de-donnees.utilisateur"),
+                getConfig().getString("reseau.base-de-donnees.mot-de-passe"),
+                Math.max(250, getConfig().getInt("reseau.base-de-donnees.delai-ms", 3000)));
+            db.createTable();
+            Duration wait = Duration.ofSeconds(Math.max(1, getConfig().getInt("reseau.attente-max-secondes", 10)));
+            NetworkDisabled net = new NetworkDisabled(this, disabledPlayers, db, link, wait);
+            net.start();
+            network = net;
+            getLogger().info("SHNetwork détecté : la liste des joueurs désactivés est partagée entre les serveurs (base partagée).");
+        } catch (Exception | LinkageError e) {
+            if (db != null) db.close();
+            getLogger().log(Level.SEVERE, "SHNetwork présent mais inutilisable, liste des joueurs désactivés locale à ce serveur : " + e);
+        }
+    }
+
+    /** messages.yml, avec les valeurs du jar pour toute clé absente du fichier du serveur. */
+    private void loadMessages() {
+        File file = new File(getDataFolder(), "messages.yml");
+        if (!file.exists()) saveResource("messages.yml", false);
+        messages = YamlConfiguration.loadConfiguration(file);
+        try (InputStreamReader defaults = new InputStreamReader(Objects.requireNonNull(getResource("messages.yml")), StandardCharsets.UTF_8)) {
+            messages.setDefaults(YamlConfiguration.loadConfiguration(defaults));
+        } catch (Exception e) {
+            getLogger().log(Level.WARNING, "messages.yml de référence illisible : " + e.getMessage());
+        }
+    }
+
+    /** Texte de messages.yml, couleurs appliquées. */
+    private String getMessage(String key) {
+        return ChatColor.translateAlternateColorCodes('&', messages.getString(key, key));
     }
 
     private void loadConfigValues() {
@@ -188,6 +252,11 @@ public class SHAutoTool extends JavaPlugin {
 
     public void togglePlayer(Player player) {
         UUID playerId = player.getUniqueId();
+        if (network != null) {
+            boolean nowDisabled = network.toggle(playerId);
+            player.sendMessage(ChatColor.translateAlternateColorCodes('&', nowDisabled ? this.messageToggleDisabled : this.messageToggleEnabled));
+            return;
+        }
         if (disabledPlayers.contains(playerId)) {
             disabledPlayers.remove(playerId);
             player.sendMessage(ChatColor.translateAlternateColorCodes('&', this.messageToggleEnabled));
@@ -196,6 +265,23 @@ public class SHAutoTool extends JavaPlugin {
             player.sendMessage(ChatColor.translateAlternateColorCodes('&', this.messageToggleDisabled));
         }
         saveDisabledPlayersToFile(true);
+    }
+
+    /** /shautotool import : reprend disabled_players.txt dans la base partagée (une fois, sans écraser ce qui y est déjà). */
+    private void importDisabledPlayers(CommandSender sender) {
+        if (network == null) {
+            sender.sendMessage(getMessage("reseau-inactif"));
+            return;
+        }
+        network.importFile(disabledPlayersFile.toPath(), (counts, error) -> {
+            if (error != null) {
+                sender.sendMessage(getMessage("reseau-import-erreur").replace("%erreur%", error));
+            } else {
+                sender.sendMessage(getMessage("reseau-import")
+                    .replace("%ajoutes%", String.valueOf(counts[0]))
+                    .replace("%deja%", String.valueOf(counts[1])));
+            }
+        });
     }
 
     @Override
@@ -218,7 +304,11 @@ public class SHAutoTool extends JavaPlugin {
                 sender.sendMessage("§aSHAutoTool configuration reloaded.");
                 return true;
             }
-            sender.sendMessage("§eUsage: /shautotool reload");
+            if (args.length > 0 && args[0].equalsIgnoreCase("import")) {
+                importDisabledPlayers(sender);
+                return true;
+            }
+            sender.sendMessage("§eUsage: /shautotool <reload|import>");
             return true;
         }
         return false;
