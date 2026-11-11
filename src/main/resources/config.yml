@@ -6,17 +6,20 @@
 # serveur à l'autre (voir la section 'reseau' en bas du fichier).
 #
 # Commandes :
-#   /shautotooltoggle     Active ou désactive l'AutoTool pour soi (alias : /shatt, /autotooltoggle).
-#   /shautotool reload    Recharge la configuration (alias : /shat). Les clés de 'reseau' demandent un redémarrage.
+#   /autotool             Active ou désactive l'AutoTool pour soi (alias : /shautotooltoggle, /autotooltoggle, /shatt).
+#   /shautotool reload    Recharge config.yml et messages.yml ; un fichier illisible ne change rien (alias : /shat).
+#                         disabled_players.txt n'est jamais relu. Les clés de 'reseau' demandent un redémarrage.
 #   /shautotool import    Mode réseau : reprend disabled_players.txt dans la base partagée (une seule fois).
 #
-# Permissions :
-#   shautotool.admin      Utiliser /shautotool (par défaut : op).
-#   shautotool.reload     Recharger la configuration (par défaut : op).
+# Permissions (op par défaut) :
+#   shautotool.admin          Parent des permissions d'administration :
+#     shautotool.admin.reload   /shautotool reload
+#     shautotool.admin.import   /shautotool import
+#   /autotool n'a pas de permission : tout joueur peut l'utiliser.
 #
 # Placeholder : %shautotool_status% = texte de 'placeholders' selon l'état du joueur.
 #
-# Les messages du mode réseau sont dans 'messages.yml'.
+# Les messages sont dans 'messages.yml'.
 #
 # ======================================================================== #
 
@@ -70,10 +73,6 @@ options:
 placeholders:
   status_enabled: enabled
   status_disabled: disabled
-
-messages:
-  toggle-enabled: '&7&l« &a&lSH &8&l» &fVous avez activé l''auto-tool'
-  toggle-disabled: '&7&l« &c&lSH &8&l» &fVous avez désactivé l''auto-tool'
 
 # Mode réseau. Actif seulement si SHNetwork est installé et 'actif' vaut true : la liste des joueurs qui ont
 # désactivé l'AutoTool est alors dans la base partagée (table shautotool_disabled : une ligne par joueur) et relue

@@ -11,6 +11,8 @@ import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.configuration.InvalidConfigurationException;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
@@ -42,8 +44,6 @@ public class SHAutoTool extends JavaPlugin {
     private Set<Material> blockBlacklist = new HashSet<>();
     private String placeholderEnabled;
     private String placeholderDisabled;
-    private String messageToggleEnabled;
-    private String messageToggleDisabled;
     private boolean disableIfHoldingGoldenAxe; // <--- NOUVEAU CHAMP
 
     @Override
@@ -52,7 +52,7 @@ public class SHAutoTool extends JavaPlugin {
         // pour que les nouvelles clés soient ajoutées au fichier de l'utilisateur.
         saveDefaultConfig();
 
-        loadConfigValues();
+        loadConfigValues(getConfig());
 
         if (!getDataFolder().exists()) {
             getDataFolder().mkdirs();
@@ -116,16 +116,53 @@ public class SHAutoTool extends JavaPlugin {
         }
     }
 
-    /** messages.yml, avec les valeurs du jar pour toute clé absente du fichier du serveur. */
-    private void loadMessages() {
-        File file = new File(getDataFolder(), "messages.yml");
-        if (!file.exists()) saveResource("messages.yml", false);
-        messages = YamlConfiguration.loadConfiguration(file);
-        try (InputStreamReader defaults = new InputStreamReader(Objects.requireNonNull(getResource("messages.yml")), StandardCharsets.UTF_8)) {
-            messages.setDefaults(YamlConfiguration.loadConfiguration(defaults));
-        } catch (Exception e) {
-            getLogger().log(Level.WARNING, "messages.yml de référence illisible : " + e.getMessage());
+    private YamlConfiguration jarMessages() {
+        try (InputStreamReader reader = new InputStreamReader(Objects.requireNonNull(getResource("messages.yml")), StandardCharsets.UTF_8)) {
+            return YamlConfiguration.loadConfiguration(reader);
+        } catch (IOException | RuntimeException e) {
+            return new YamlConfiguration();
         }
+    }
+
+    /**
+     * messages.yml du serveur, complété par les valeurs du jar. S'il n'existe pas, il est créé à partir de la section
+     * 'messages' de config.yml (textes du serveur conservés) ; cette section n'est plus lue ensuite.
+     */
+    private YamlConfiguration readMessages(FileConfiguration source) throws IOException, InvalidConfigurationException {
+        File file = new File(getDataFolder(), "messages.yml");
+        YamlConfiguration defaults = jarMessages();
+        if (!file.exists()) {
+            ConfigurationSection legacy = source.getConfigurationSection("messages");
+            YamlConfiguration created = new YamlConfiguration();
+            created.options().setHeader(List.of(
+                "Messages de SHAutoTool. Couleurs avec &. Placeholders : %commands%, %file%, %error%, %ajoutes%, %deja%."));
+            for (String key : defaults.getKeys(false)) {
+                created.set(key, legacy != null && legacy.isString(key) ? legacy.getString(key) : defaults.getString(key));
+            }
+            getDataFolder().mkdirs();
+            created.save(file);
+        }
+        YamlConfiguration loaded = new YamlConfiguration();
+        loaded.load(file);
+        loaded.setDefaults(defaults);
+        return loaded;
+    }
+
+    // Au démarrage : un messages.yml illisible n'est jamais réécrit, les textes du jar servent en attendant
+    private void loadMessages() {
+        try {
+            messages = readMessages(getConfig());
+        } catch (IOException | InvalidConfigurationException e) {
+            getLogger().severe("messages.yml unreadable (" + errorText(e) + "), using the jar texts. Fix the file then run /shautotool reload.");
+            messages = new YamlConfiguration();
+            messages.setDefaults(jarMessages());
+        }
+    }
+
+    private static String errorText(Exception error) {
+        String text = error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
+        text = text.replaceAll("[\\s&§]+", " ").strip();
+        return text.length() > 200 ? text.substring(0, 200) + "..." : text;
     }
 
     /** Texte de messages.yml, couleurs appliquées. */
@@ -133,8 +170,7 @@ public class SHAutoTool extends JavaPlugin {
         return ChatColor.translateAlternateColorCodes('&', messages.getString(key, key));
     }
 
-    private void loadConfigValues() {
-        FileConfiguration config = getConfig();
+    private void loadConfigValues(FileConfiguration config) {
 
         this.worldMode = config.getString("worlds.mode", "blacklist").toLowerCase();
         this.worldList = new HashSet<>(config.getStringList("worlds.list"));
@@ -152,9 +188,6 @@ public class SHAutoTool extends JavaPlugin {
 
         this.placeholderEnabled = config.getString("placeholders.status_enabled", "&aActivé");
         this.placeholderDisabled = config.getString("placeholders.status_disabled", "&cDésactivé");
-
-        this.messageToggleEnabled = config.getString("messages.toggle-enabled", "&aSHAutoTool a été activé pour vous !");
-        this.messageToggleDisabled = config.getString("messages.toggle-disabled", "&cSHAutoTool a été désactivé pour vous !");
 
         // <--- NOUVEAU : Chargement de l'option pour la hache en or ---
         this.disableIfHoldingGoldenAxe = config.getBoolean("options.disable-if-holding-golden-axe", true);
@@ -254,15 +287,15 @@ public class SHAutoTool extends JavaPlugin {
         UUID playerId = player.getUniqueId();
         if (network != null) {
             boolean nowDisabled = network.toggle(playerId);
-            player.sendMessage(ChatColor.translateAlternateColorCodes('&', nowDisabled ? this.messageToggleDisabled : this.messageToggleEnabled));
+            player.sendMessage(getMessage(nowDisabled ? "toggle-disabled" : "toggle-enabled"));
             return;
         }
         if (disabledPlayers.contains(playerId)) {
             disabledPlayers.remove(playerId);
-            player.sendMessage(ChatColor.translateAlternateColorCodes('&', this.messageToggleEnabled));
+            player.sendMessage(getMessage("toggle-enabled"));
         } else {
             disabledPlayers.add(playerId);
-            player.sendMessage(ChatColor.translateAlternateColorCodes('&', this.messageToggleDisabled));
+            player.sendMessage(getMessage("toggle-disabled"));
         }
         saveDisabledPlayersToFile(true);
     }
@@ -284,33 +317,96 @@ public class SHAutoTool extends JavaPlugin {
         });
     }
 
+    private static final List<String> SUBCOMMANDS = List.of("reload", "import");
+
+    private boolean can(CommandSender sender, String sub) {
+        return sender.hasPermission("shautotool.admin." + sub);
+    }
+
+    private List<String> allowedSubcommands(CommandSender sender) {
+        List<String> result = new ArrayList<>();
+        for (String sub : SUBCOMMANDS) {
+            if (can(sender, sub)) result.add(sub);
+        }
+        return result;
+    }
+
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
-        if (command.getName().equalsIgnoreCase("shautotooltoggle")) {
+        if (command.getName().equalsIgnoreCase("autotool")) {
             if (!(sender instanceof Player player)) {
-                sender.sendMessage("This command can only be run by a player.");
+                sender.sendMessage(getMessage("player-only"));
                 return true;
             }
             togglePlayer(player);
             return true;
         } else if (command.getName().equalsIgnoreCase("shautotool")) {
-            if (args.length > 0 && args[0].equalsIgnoreCase("reload")) {
-                if (!sender.hasPermission("shautotool.reload")) {
-                    sender.sendMessage("§cYou do not have permission to execute this command.");
-                    return true;
-                }
-                reloadConfig();
-                loadConfigValues();
-                sender.sendMessage("§aSHAutoTool configuration reloaded.");
+            String sub = args.length == 0 ? "" : args[0].toLowerCase(Locale.ROOT);
+            if (!SUBCOMMANDS.contains(sub)) {
+                List<String> allowed = allowedSubcommands(sender);
+                sender.sendMessage(allowed.isEmpty()
+                    ? getMessage("no-permission")
+                    : getMessage("admin-usage").replace("%commands%", String.join("|", allowed)));
                 return true;
             }
-            if (args.length > 0 && args[0].equalsIgnoreCase("import")) {
+            if (!can(sender, sub)) {
+                sender.sendMessage(getMessage("no-permission"));
+                return true;
+            }
+            if (sub.equals("reload")) {
+                reloadFiles(sender);
+            } else {
                 importDisabledPlayers(sender);
-                return true;
             }
-            sender.sendMessage("§eUsage: /shautotool <reload|import>");
             return true;
         }
         return false;
+    }
+
+    /**
+     * /shautotool reload : relit config.yml et messages.yml. Les deux fichiers sont lus à part et vérifiés d'abord :
+     * si l'un est illisible, rien ne change. disabled_players.txt et la base ne sont jamais touchés ; la section
+     * 'reseau' demande un redémarrage.
+     */
+    private void reloadFiles(CommandSender sender) {
+        YamlConfiguration fresh = new YamlConfiguration();
+        File configPath = new File(getDataFolder(), "config.yml");
+        if (!configPath.exists()) saveDefaultConfig();
+        try {
+            fresh.load(configPath);
+        } catch (IOException | InvalidConfigurationException e) {
+            reloadFailed(sender, "config.yml", e);
+            return;
+        }
+        try (InputStreamReader reader = new InputStreamReader(Objects.requireNonNull(getResource("config.yml")), StandardCharsets.UTF_8)) {
+            fresh.setDefaults(YamlConfiguration.loadConfiguration(reader));
+        } catch (IOException | RuntimeException ignored) {
+            // sans les valeurs du jar, celles du code s'appliquent
+        }
+        YamlConfiguration freshMessages;
+        try {
+            freshMessages = readMessages(fresh);
+        } catch (IOException | InvalidConfigurationException e) {
+            reloadFailed(sender, "messages.yml", e);
+            return;
+        }
+        messages = freshMessages;
+        loadConfigValues(fresh);
+        sender.sendMessage(getMessage("reload-done"));
+    }
+
+    private void reloadFailed(CommandSender sender, String file, Exception error) {
+        String detail = errorText(error);
+        getLogger().warning("Reload cancelled, " + file + " unreadable: " + detail);
+        sender.sendMessage(getMessage("reload-error").replace("%file%", file).replace("%error%", detail));
+    }
+
+    @Override
+    public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String alias, @NotNull String[] args) {
+        if (command.getName().equalsIgnoreCase("shautotool") && args.length == 1) {
+            String start = args[0].toLowerCase(Locale.ROOT);
+            return allowedSubcommands(sender).stream().filter(sub -> sub.startsWith(start)).toList();
+        }
+        return List.of();
     }
 }

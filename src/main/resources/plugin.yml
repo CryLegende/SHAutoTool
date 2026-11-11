@@ -13,20 +13,26 @@ libraries:
   - org.mariadb.jdbc:mariadb-java-client:3.4.1
 
 commands:
-  shautotooltoggle:
+  autotool:
     description: Active ou désactive l'AutoTool pour vous.
-    usage: /shautotooltoggle
-    aliases: [shatt, autotooltoggle]
+    usage: /autotool
+    aliases: [shautotooltoggle, autotooltoggle, shatt]
   shautotool:
-    description: Commande administrative pour SHAutoTool.
+    description: Administration de SHAutoTool (reload, import).
     usage: /shautotool <reload|import>
     aliases: [shat]
-    permission: shautotool.admin
+    permission: shautotool.admin.reload;shautotool.admin.import
 
 permissions:
   shautotool.admin:
-    description: "Donne accès aux commandes d'administration de SHAutoTool."
+    description: Toute l'administration de SHAutoTool.
     default: op
-  shautotool.reload:
-    description: "Permet de recharger la configuration de SHAutoTool."
+    children:
+      shautotool.admin.reload: true
+      shautotool.admin.import: true
+  shautotool.admin.reload:
+    description: Recharger config.yml et messages.yml (/shautotool reload).
+    default: op
+  shautotool.admin.import:
+    description: Reprendre disabled_players.txt dans la base partagée, mode réseau (/shautotool import).
     default: op

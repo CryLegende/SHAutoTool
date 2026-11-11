@@ -37,15 +37,19 @@ Sans SHNetwork, ou sans les clés `reseau` dans la configuration, le plugin se c
 
 | Commande | Alias | Description | Permission |
 |---|---|---|---|
-| `/shautotooltoggle` | `/shatt`, `/autotooltoggle` | Active ou désactive l'AutoTool pour vous. | — |
-| `/shautotool` | `/shat` | Commande administrative pour SHAutoTool (`reload`, `import`). | `shautotool.admin` |
+| `/autotool` | `/shautotooltoggle`, `/autotooltoggle`, `/shatt` | Active ou désactive l'AutoTool pour vous. | — |
+| `/shautotool reload` | `/shat` | Recharge `config.yml` et `messages.yml`. Un fichier illisible ne change rien : le message donne le fichier et l'erreur. La section `reseau` demande un redémarrage. | `shautotool.admin.reload` |
+| `/shautotool import` | `/shat` | Mode réseau : reprend `disabled_players.txt` dans la base partagée. | `shautotool.admin.import` |
+
+`/shautotool` marche aussi depuis la console. Sans argument, il rappelle les sous-commandes que l'on a le droit d'utiliser.
 
 ## Permissions
 
 | Permission | Description | Par défaut |
 |---|---|---|
-| `shautotool.admin` | Donne accès aux commandes d'administration de SHAutoTool. | `op` |
-| `shautotool.reload` | Permet de recharger la configuration de SHAutoTool. | `op` |
+| `shautotool.admin` | Toute l'administration (parent des deux permissions suivantes). | `op` |
+| `shautotool.admin.reload` | `/shautotool reload`. | `op` |
+| `shautotool.admin.import` | `/shautotool import`. | `op` |
 
 ## Configuration
 
@@ -54,8 +58,10 @@ Fichiers par défaut repris du serveur (secrets remplacés par `CHANGE_ME`). Cli
 <pre>
 plugins/SHAutoTool/
 ├── <a href="src/main/resources/config.yml">config.yml</a>
-└── <a href="src/main/resources/messages.yml">messages.yml</a>
+└── <a href="src/main/resources/messages.yml">messages.yml</a>   messages du plugin
 </pre>
+
+Au premier démarrage, `messages.yml` est créé à partir de la section `messages` de l'ancien `config.yml` si elle existe, puis complété par les valeurs du jar. Cette section n'est plus lue ensuite.
 
 ## Compilation
 
