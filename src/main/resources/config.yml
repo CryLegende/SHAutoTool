@@ -38,7 +38,7 @@ worlds:
   #   - 'world_creative'
   #   - 'monde_minijeux'
   list:
-  - SuperiorWorld
+  - world
 
 # Le changement d'outil automatique ne se déclenchera pas si vous cliquez
 # sur l'un de ces blocs. Utile pour éviter de casser des blocs fragiles
@@ -49,19 +49,6 @@ block-blacklist:
 - WHEAT
 - POTATOES
 - CARROTS
-- BEETROOTS
-- NETHER_WART
-- COCOA
-- SWEET_BERRY_BUSH
-- MELON_STEM
-- PUMPKIN_STEM
-- SUGAR_CANE
-- BAMBOO
-- KELP_PLANT
-- VINE
-- TWISTING_VINES
-- WEEPING_VINES
-- SCULK_CATALYST
 
 options:
   # Si 'true', l'auto-tool ne s'activera pas si le joueur a une hache en or
@@ -84,8 +71,8 @@ reseau:
   # le joueur avant de relire son état
   attente-max-secondes: 10
   base-de-donnees:
-    url: "jdbc:mariadb://127.0.0.1:3306/bo_net"
-    utilisateur: shautotool
+    url: "jdbc:mariadb://127.0.0.1:3306/minecraft"
+    utilisateur: CHANGE_ME
     mot-de-passe: CHANGE_ME
     # Délai maximal de connexion et de réponse de la base, en millisecondes. Une base qui ne répond pas
     # laisse le joueur avec l'AutoTool actif.
